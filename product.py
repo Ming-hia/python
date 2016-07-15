@@ -199,3 +199,8 @@ df["is_bread"] = fields.apply(is_bread)
 df["is_lata"] = fields.apply(is_lata)
 df["hot_dog"] = fields.apply(hot_dog)
 df["sandwich"] = fields.apply(sandwich)
+
+# save for wide-table
+del df["brands"]
+del df["NombreProducto"]
+df.to_csv("tables/product.csv", index = False)

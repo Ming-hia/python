@@ -35,3 +35,6 @@ df["Education"] = fields.apply(lambda x: find_words(x, ["COLEGIO","UNIVERSIDAD"]
 df["Cafe"] = fields.apply(lambda x: find_words(x,["CAFETERIA","CAFÉ"]))
 df["Restuarant"] = fields.apply(lambda x: find_words(x,["RESTAURANTE","HOTEL"]))
 
+# save for wide-table
+del df["NombreCliente"]
+df.to_csv("tables/client.csv", index = False)
