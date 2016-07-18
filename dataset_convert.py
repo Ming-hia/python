@@ -3,7 +3,7 @@
 
 TRAIN_FILENAME = "train.csv"
 TEST_FILENAME = "test.csv"
-CSV_FILENAME = "records.csv"
+CSV_FILENAME = "./tables/train.csv"
 
 START_WEEKNUM = 3
 END_WEEKNUM = 9
@@ -11,8 +11,7 @@ WEEKNUM_LENGTH = END_WEEKNUM - START_WEEKNUM + 1
 
 class Record():
     def __init__(self, agent, channel, route, price):
-        self.length = WEEKNUM_LENGTH
-        self.demand_list = [0] * self.length
+        self.demand_list = [0] * WEEKNUM_LENGTH
         self.agent = agent
         self.channel = channel
         self.route = route
@@ -48,7 +47,7 @@ def read_data_streaming(var_index_dict):
     RecordSet = {}
     Total = 0
     
-    while Total:
+    while 1:
         line = f.readline().strip()
         if line == "":
             break
