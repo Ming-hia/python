@@ -7,19 +7,24 @@ from sklearn.cross_validation import train_test_split
 import matplotlib.pyplot as plt
 
 INPUT_FILE = "tables/train_merged.csv"
+TEST_FILE="tables/merged_test.csv"
+OUTPUT_FILE="results/xgb1.csv"
 
 def loaddata():
-    type = {"channel": np.int8, "price": np.float16, "demand_week_1": np.int8, "demand_week_2": np.int8, "demand_week_3": np.int8,
-            "demand_week_4": np.int8,"demand_week_5": np.int8, "demand_week_6": np.int8, "demand_week_7": np.int8,
-            "weight": np.float16, "inch": np.float16, "piece": np.float16, "brand": np.int8, "is_drink": np.int8,
-            "pct": np.float16, "has_choc": np.int8, "has_vanilla": np.int8, "has_multigrain": np.int8,"is_bread": np.int8,
+    type = {"channel": np.int16, "price": np.float64, "demand_week_1": np.int16, "demand_week_2": np.int16, "demand_week_3": np.int16,
+            "demand_week_4": np.int16,"demand_week_5": np.int16, "demand_week_6": np.int16, "demand_week_7": np.int16,
+            "weight": np.float64, "inch": np.float64, "piece": np.float64, "brand": np.int8, "is_drink": np.int8,
+            "pct": np.float64, "has_choc": np.int8, "has_vanilla": np.int8, "has_multigrain": np.int8,"is_bread": np.int8,
             "is_lata": np.int8, "hot_dog": np.int8, "sandwich": np.int8, "State": np.int8,"popularity": np.int8,
-            "NaN": np.int8, "NickName": np.int8, "NonName": np.int8, "Group": np.int8,"Grocery": np.float16,
+            "NaN": np.int8, "NickName": np.int8, "NonName": np.int8, "Group": np.int8,"Grocery": np.float64,
             "SuperChain": np.int8, "Pharmacy": np.int8, "Education": np.int8, "Cafe": np.int8, "Restuarant": np.int8}
     train=pd.read_csv(INPUT_FILE,header=0,dtype=type)
+    #train2 = pd.read_csv(INPUT_FILE, header=0)
     featurelist=list(train.columns)
-    Y_train=train["demand_week_7"].values
-    Y_train[Y_train<0]=0
+    is_valid=train["demand_week_7"]>0
+    Y_train=train["demand_week_7"]
+    #Y_train[Y_train<0]=0
+    Y_train=Y_train[is_valid].values
     featurelist.remove("demand_week_7")
     X_train=train[featurelist]
     for fea in ["weight","inch","piece","pct"]:
@@ -27,15 +32,13 @@ def loaddata():
         X_train[fea][nulllist]=-1
         is_na=pd.DataFrame(list(nulllist.apply(int)),dtype=np.int8,columns=[fea+"_isna"])
         X_train=X_train.join(is_na)
-
+    X_train=X_train[is_valid]
     return X_train,Y_train,featurelist
 
-preds=np.array([1,2,3])
-labels=np.array([1,2,4])
 
 def rmsle(preds, dtrain):
     labels=dtrain.get_label()
-    labels[labels<0]=0
+    preds[preds < 1]=1
     score=np.sqrt(1/float(len(labels))*(sum((np.log(preds+1)-np.log(labels+1))**2)))
     return 'RMSLE',score
 
@@ -57,8 +60,27 @@ def xgbmodel(X_train,Y_train,iflog=0,ifcross=1,k_folder=5,sample_seed=111):
     #preds=bst.predict(dmodel)
     #labels=dmodel.get_label()
     #plt.hist(preds)
-    train_score=rmsle(bst.predict(dmodel),dmodel)
-    val_score=rmsle(bst.predict(dval),dval)
+    #train_score=rmsle(bst.predict(dmodel),dmodel)
+    #val_score=rmsle(bst.predict(dval),dval)
+
+def score(bst):
+    test = pd.read_csv(TEST_FILE, header=0)
+    test["price"][test["price"].isnull()]=0
+    id=test["id"]
+    del test["id"]
+    for fea in ["weight", "inch", "piece", "pct"]:
+        nulllist = test[fea].isnull()
+        test[fea][nulllist] = -1
+        is_na = pd.DataFrame(list(nulllist.apply(int)), dtype=np.int8, columns=[fea + "_isna"])
+        test = test.join(is_na)
+    dtest = xgb.DMatrix(test)
+    scores=bst.predict(dtest)
+    scores2=np.round(scores)
+    scores2[scores2<1]=1
+    scores2=pd.DataFrame(scores2,columns=["Demanda_uni_equil"],dtype=np.int64)
+    id=pd.DataFrame(id,columns=["id"],dtype=np.int64)
+    output=id.join(scores2)
+    output.to_csv(OUTPUT_FILE,index=False)
 
 
 
@@ -74,9 +96,13 @@ max_depth=5
 subsample=0.7
 colsample_bytree=0.7
 nthread=8
-num_round=500
-
+num_round=1000
+sample_seed=111
 xgbmodel(X_train,Y_train,iflog=0,ifcross=1,k_folder=5,sample_seed=111)
+
+
+score(bst)
+
 
 
 
