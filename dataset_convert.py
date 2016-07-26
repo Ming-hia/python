@@ -3,7 +3,7 @@
 
 TRAIN_FILENAME = "train.csv"
 TEST_FILENAME = "test.csv"
-CSV_FILENAME = "./tables/train.csv"
+CSV_FILENAME = "records.csv"
 
 START_WEEKNUM = 3
 END_WEEKNUM = 9
@@ -37,8 +37,7 @@ def get_var_index():
     for idx,var in enumerate(header_test):
         var_index_dict["test"][var] = idx
 
-    return var_index_dict
-
+    return var_index_dict  
 
 def read_data_streaming(var_index_dict):
     f = open(TRAIN_FILENAME, "r")

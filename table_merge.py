@@ -6,9 +6,9 @@ import numpy as np
 INPUT_AGENT_FILE = "tables/agent.csv"
 INPUT_CLIENT_FILE = "tables/client.csv"
 INPUT_PRODUCT_FILE = "tables/product.csv"
-INPUT_TRAIN_TABLE_FILE = "tables/train.csv"
+INPUT_TRAIN_TABLE_FILE = "tables/test.csv"
 
-OUTPUT_FILE = "tables/train_merged.csv"
+OUTPUT_FILE = "tables/test_merged.csv"
 
 print ""
 print "load csv files to pandas dataframes"
