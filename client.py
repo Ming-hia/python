@@ -37,4 +37,5 @@ df["Restuarant"] = fields.apply(lambda x: find_words(x,["RESTAURANTE","HOTEL"]))
 
 # save for wide-table
 del df["NombreCliente"]
+df = df.groupby('Cliente_ID').first().reset_index()
 df.to_csv("tables/client.csv", index = False)
