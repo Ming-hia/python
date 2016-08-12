@@ -23,4 +23,9 @@ if __name__ == "__main__":
 
     train = pd.read_csv(TRAIN_TABLE_FILENAME, header = 0)
     test = pd.merge(test, train, how="left", on = ["client","product","agent","channel","route"])
+
+    occur = test.groupby(["client","product"])["Semana"].count().reset_index()
+    occur.rename(columns={"Semana":"occur"}, inplace=True)
+    test = pd.merge(test, occur, how="left", on = ["client","product"])
+    
     test.to_csv(TEST_TABLE_FILENAME,index=False)
