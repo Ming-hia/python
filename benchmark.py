@@ -33,7 +33,7 @@ def keep_frac_items(top_k_orders, frac = 0.1):
     
     return user_product[user_product['product_basket_percentage'] >= frac].reset_index()
 
-top_k_products = keep_frac_items(top_k_orders, 0.05)
+top_k_products = keep_frac_items(top_k_orders, 0.025)
 top_k_products["pred"] = 1
 
 train_orders = orders[orders.eval_set == "train"]
@@ -46,8 +46,15 @@ valid.pred = valid.pred.fillna(0)
 print "local score: ", f1_score(valid.reordered, valid.pred)
 print "confusion matrix: \n", confusion_matrix(valid.reordered, valid.pred)
 
-prediction = pd.merge(test_orders[["order_id", "user_id"]], top_k_products[["user_id", "product_id"]])
+prediction = pd.merge(test_orders[["order_id", "user_id"]], top_k_products[["user_id", "product_id"]], how = "outer")
+
+prediction.product_id = prediction.product_id.fillna(-1)
+prediction = prediction.dropna()
+prediction.product_id = prediction.product_id.apply(int)
+prediction.order_id = prediction.order_id.apply(int)
 prediction["product_id"] = prediction["product_id"].apply(str)
+prediction["product_id"][prediction["product_id"] == "-1"] = "None"
+
 output = prediction[["order_id","product_id"]].groupby("order_id")["product_id"].apply(list).to_frame("products")
 output["products"] = output["products"].apply(lambda x: " ".join(x))
 output = output.reset_index()
