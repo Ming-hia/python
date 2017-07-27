@@ -33,19 +33,23 @@ def keep_frac_items(top_k_orders, frac = 0.1):
     
     return user_product[user_product['product_basket_percentage'] >= frac].reset_index()
 
-top_k_products = keep_frac_items(top_k_orders, 0.02)
+top_k_products = keep_frac_items(top_k_orders, 0.05)
 top_k_products["pred"] = 1
 
 train_orders = orders[orders.eval_set == "train"]
-prediction = pd.merge(train_orders[["order_id", "user_id"]], top_k_products[["user_id", "product_id", "pred"]])
-prediction = pd.merge(train[["order_id", "product_id", "reordered"]], prediction[["order_id", "product_id", "pred"]], how = "outer")
+test_orders = orders[orders.eval_set == "test"]
 
-prediction.reordered = prediction.reordered.fillna(0)
-prediction.pred = prediction.pred.fillna(0)
+valid = pd.merge(train_orders[["order_id", "user_id"]], top_k_products[["user_id", "product_id", "pred"]])
+valid = pd.merge(train[["order_id", "product_id", "reordered"]], valid[["order_id", "product_id", "pred"]], how = "outer")
+valid.reordered = valid.reordered.fillna(0)
+valid.pred = valid.pred.fillna(0)
+print "local score: ", f1_score(valid.reordered, valid.pred)
+print "confusion matrix: \n", confusion_matrix(valid.reordered, valid.pred)
 
-print prediction.head()
-
-print "local score: ", f1_score(prediction.reordered, prediction.pred)
-print "confusion matrix: \n", confusion_matrix(prediction.reordered, prediction.pred)
-prediction.to_csv("./outputs/prediction.csv", index = False)
+prediction = pd.merge(test_orders[["order_id", "user_id"]], top_k_products[["user_id", "product_id"]])
+prediction["product_id"] = prediction["product_id"].apply(str)
+output = prediction[["order_id","product_id"]].groupby("order_id")["product_id"].apply(list).to_frame("products")
+output["products"] = output["products"].apply(lambda x: " ".join(x))
+output = output.reset_index()
+output.to_csv("./outputs/prediction.csv", index = False)
 print "complete."
