@@ -27,9 +27,14 @@ print "finish reading products.csv.\n"
 
 products = pd.merge(products, departments, on = "department_id", how = "left")
 products = pd.merge(products, aisles, on = "aisle_id", how = "left")
+
+# extracting product features
 print "extracting product features."
 probs = pd.DataFrame()
 probs["orders"] = prior.groupby("product_id").size() # orders per product in prior
+probs["purchases"] = prior.groupby(["product_id", "order_id"]).add_to_cart_order.max().reset_index().groupby("product_id").add_to_cart_order.mean() # describes the relation of product and the number of the orders
+probs["purchase_order"] = prior.groupby("product_id").add_to_cart_order.mean() # describes the importances of the product
+probs["product_importances_rate"] = probs.purchase_order / probs.purchases
 probs["reorders"] = prior.groupby("product_id").reordered.sum() # reordered number per product in prior
 probs["reorder_rate"] = probs.reorders / probs.orders # reorder rate per product
 probs = probs.reset_index()
@@ -50,9 +55,8 @@ train.reordered = train.reordered.fillna(0)
 train = pd.merge(train, products, on = "product_id")
 test = pd.merge(test, products, on = "product_id")
 
-features = ["days_since_prior_order", "order_dow", "order_hour_of_day",
-            "department_id", "aisle_id",
-            "reorder_rate", "orders", "reorders"]
+features = ["days_since_prior_order", "order_dow", "order_hour_of_day", "department_id", "aisle_id", "reorder_rate", "orders", "reorders",
+            "purchase_order", "purchases", "product_importances_rate"]
 
 # feature - f1_score timeline: 
 # days_since_prior_order,order_dow,order_hour_of_day - 0.242
