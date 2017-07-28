@@ -12,6 +12,18 @@ from random import sample
 from sklearn.metrics import f1_score
 from sklearn.metrics import confusion_matrix
 
+def keep_k_orders(df, k = 10):
+    df["num_orders"] = df.groupby("user_id")["order_number"].transform(max)
+    top_k_orders = df[(df.num_orders - df.order_number) < k]
+    return top_k_orders
+    
+def keep_frac_items(top_k_orders, frac = 0.1):
+    user_product_count = top_k_orders.groupby(["user_id", "product_id"]).order_id.size().to_frame('product_count')
+    user_orders_count = top_k_orders.groupby('user_id').size().to_frame('order_count')
+    user_product = user_product_count.join(user_orders_count)
+    user_product['product_basket_percentage'] = user_product['product_count'] / user_product['order_count']    
+    return user_product[user_product['product_basket_percentage'] >= frac].reset_index()    
+
 aisles = pd.read_csv("./downloads/aisles.csv")
 print "finish reading aisles.csv;"
 departments = pd.read_csv("./downloads/departments.csv")
@@ -41,12 +53,18 @@ probs = probs.reset_index()
 products = pd.merge(products, probs, on = "product_id")
 del probs
 
+# extracting user-product features
 prior = pd.merge(prior, orders)
+top_k_orders = keep_k_orders(prior)
+top_k_products = keep_frac_items(top_k_orders, 0.025)
+top_k_products["is_top_k"] = 1
+user_product_list = prior[["user_id","product_id"]].drop_duplicates()
+user_product_list = pd.merge(user_product_list, top_k_products, how = "left")
+user_product_list.is_top_k = user_product_list.is_top_k.fillna(0)
+
 train_orders = orders[orders.eval_set == "train"]
 test_orders = orders[orders.eval_set == "test"]
 del orders
-
-user_product_list = prior[["user_id","product_id"]].drop_duplicates()
 train_orders = pd.merge(train_orders, user_product_list, on = "user_id", how = "left")
 test = pd.merge(test_orders, user_product_list, on = "user_id", how = "left")
 
@@ -56,10 +74,12 @@ train = pd.merge(train, products, on = "product_id")
 test = pd.merge(test, products, on = "product_id")
 
 features = ["days_since_prior_order", "order_dow", "order_hour_of_day", "department_id", "aisle_id", "reorder_rate", "orders", "reorders",
-            "purchase_order", "purchases", "product_importances_rate"]
+            "purchase_order", "purchases", "product_importances_rate",
+            "is_top_k"]
 
 # feature - f1_score timeline: 
-# days_since_prior_order,order_dow,order_hour_of_day - 0.242
+# ["days_since_prior_order", "order_dow", "order_hour_of_day", "department_id", "aisle_id", "reorder_rate", "orders", "reorders"] - 0.242
+# ["purchase_order", "purchases", "product_importances_rate"] - 0.243 (+ 0.001)
 
 
 
