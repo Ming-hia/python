@@ -50,7 +50,13 @@ train.reordered = train.reordered.fillna(0)
 train = pd.merge(train, products, on = "product_id")
 test = pd.merge(test, products, on = "product_id")
 
-features = ["days_since_prior_order", "order_dow", "reorder_rate", "order_hour_of_day"]
+features = ["days_since_prior_order", "order_dow", "order_hour_of_day"]
+            #"reorder_rate",  "department_id", "aisle_id",
+            #"orders", "reorders"]
+
+# feature - f1_score timeline: 
+# days_since_prior_order,order_dow,order_hour_of_day - 
+
 
 def k_fold(index, k = 5):
     n = len(index)
@@ -66,12 +72,16 @@ def k_fold(index, k = 5):
         index_list.append({"train": index.difference(ids), "valid": set(ids)})
         pool = pool.difference(ids)
     return index_list
-            
-user_splits = k_fold(train.user_id.unique(), 5)
+
+n_fold = 5            
+user_splits = k_fold(train.user_id.unique(), n_fold)
 
 X_test = test[features]
 test["pred"] = 0
-for i in range(1):
+avg_threshold = 0
+scores = []
+
+for i in range(n_fold):
     X_train = train[train.user_id.isin(user_splits[0]["train"])][features]
     Y_train = train[train.user_id.isin(user_splits[0]["train"])]["reordered"]
     X_valid = train[train.user_id.isin(user_splits[0]["valid"])][features]
@@ -79,13 +89,23 @@ for i in range(1):
     model = lgb.LGBMClassifier(objective='binary',
                         max_depth = 4,
                         learning_rate=0.05,
-                        n_estimators=100)                        
+                        n_estimators=100)
     model.fit(X_train, Y_train, verbose = 10)
-    valid_pred = model.predict(X_valid)
-    print "local score:", f1_score(Y_valid, valid_pred)
-    test["pred"] += model.predict(X_test)
+    valid_pred = pd.DataFrame(model.predict_proba(X_valid))[1]
+    threshold = float(sum(Y_valid)) / len(Y_valid)
+    avg_threshold += threshold
+    valid_pred = np.where(valid_pred > threshold, 1, 0)
+    score = f1_score(Y_valid, valid_pred)
+    print "fold {} local score:".format(i), score
+    scores.append(score)
+    test["pred"] += pd.DataFrame(model.predict_proba(X_test))[1]
 
-test["pred"] = np.where(test.pred > 0, 1, 0)
+avg_threshold /= n_fold
+test["pred"] /= n_fold
+print "average score: ", np.average(scores)
+print "average threshold: ", avg_threshold
+
+test["pred"] = np.where(test.pred > avg_threshold, 1, 0)
 prediction = test[["order_id", "product_id", "pred"]]
 prediction.product_id = prediction.product_id.apply(str)
 order_cnt = prediction.groupby("order_id").pred.sum()
