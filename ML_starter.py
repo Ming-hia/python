@@ -9,8 +9,8 @@ import pandas as pd
 import numpy as np
 import lightgbm as lgb
 from random import sample
-from sklearn.metrics import confusion_matrix
 from sklearn.metrics import f1_score
+from sklearn.metrics import confusion_matrix
 
 aisles = pd.read_csv("./downloads/aisles.csv")
 print "finish reading aisles.csv;"
@@ -25,14 +25,32 @@ print "finish reading orders.csv;"
 products = pd.read_csv("./downloads/products.csv")
 print "finish reading products.csv.\n"
 
-train = pd.merge(train, orders)
+products = pd.merge(products, departments, on = "department_id", how = "left")
+products = pd.merge(products, aisles, on = "aisle_id", how = "left")
+print "extracting product features."
+probs = pd.DataFrame()
+probs["orders"] = prior.groupby("product_id").size() # orders per product in prior
+probs["reorders"] = prior.groupby("product_id").reordered.sum() # reordered number per product in prior
+probs["reorder_rate"] = probs.reorders / probs.orders # reorder rate per product
+probs = probs.reset_index()
+products = pd.merge(products, probs, on = "product_id")
+del probs
+
 prior = pd.merge(prior, orders)
+train_orders = orders[orders.eval_set == "train"]
 test_orders = orders[orders.eval_set == "test"]
+del orders
 
 user_product_list = prior[["user_id","product_id"]].drop_duplicates()
+train_orders = pd.merge(train_orders, user_product_list, on = "user_id", how = "left")
 test = pd.merge(test_orders, user_product_list, on = "user_id", how = "left")
 
-features = ["days_since_prior_order", "order_dow"]
+train = pd.merge(train_orders, train, how = "left")
+train.reordered = train.reordered.fillna(0)
+train = pd.merge(train, products, on = "product_id")
+test = pd.merge(test, products, on = "product_id")
+
+features = ["days_since_prior_order", "order_dow", "reorder_rate", "order_hour_of_day"]
 
 def k_fold(index, k = 5):
     n = len(index)
@@ -63,7 +81,8 @@ for i in range(1):
                         learning_rate=0.05,
                         n_estimators=100)                        
     model.fit(X_train, Y_train, verbose = 10)
-    print "local score:", f1_score(Y_valid, model.predict(X_valid))
+    valid_pred = model.predict(X_valid)
+    print "local score:", f1_score(Y_valid, valid_pred)
     test["pred"] += model.predict(X_test)
 
 test["pred"] = np.where(test.pred > 0, 1, 0)
