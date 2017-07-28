@@ -50,12 +50,13 @@ train.reordered = train.reordered.fillna(0)
 train = pd.merge(train, products, on = "product_id")
 test = pd.merge(test, products, on = "product_id")
 
-features = ["days_since_prior_order", "order_dow", "order_hour_of_day"]
-            #"reorder_rate",  "department_id", "aisle_id",
-            #"orders", "reorders"]
+features = ["days_since_prior_order", "order_dow", "order_hour_of_day",
+            "department_id", "aisle_id",
+            "reorder_rate", "orders", "reorders"]
 
 # feature - f1_score timeline: 
-# days_since_prior_order,order_dow,order_hour_of_day - 
+# days_since_prior_order,order_dow,order_hour_of_day - 0.242
+
 
 
 def k_fold(index, k = 5):
@@ -82,10 +83,10 @@ avg_threshold = 0
 scores = []
 
 for i in range(n_fold):
-    X_train = train[train.user_id.isin(user_splits[0]["train"])][features]
-    Y_train = train[train.user_id.isin(user_splits[0]["train"])]["reordered"]
-    X_valid = train[train.user_id.isin(user_splits[0]["valid"])][features]
-    Y_valid = train[train.user_id.isin(user_splits[0]["valid"])]["reordered"]
+    X_train = train[train.user_id.isin(user_splits[i]["train"])][features]
+    Y_train = train[train.user_id.isin(user_splits[i]["train"])]["reordered"]
+    X_valid = train[train.user_id.isin(user_splits[i]["valid"])][features]
+    Y_valid = train[train.user_id.isin(user_splits[i]["valid"])]["reordered"]
     model = lgb.LGBMClassifier(objective='binary',
                         max_depth = 4,
                         learning_rate=0.05,
