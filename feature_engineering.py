@@ -19,7 +19,7 @@ prior = pd.merge(prior, orders)
 print "prior contrains {} / {} users.".format(prior.user_id.unique().size, orders.user_id.unique().size)
 # order_id, product_id, add_to_cart_order, reordered, user_id, eval_set, order_number, order_dow, order_hour_of_day, days_since_prior_order
 
-print "product features extraction."
+print "product features extraction ..."
 product_library = pd.DataFrame()
 print "product_occur_times;"
 product_library["product_occur_times"] = prior.groupby("product_id").order_id.size() # orders per product in prior
@@ -28,9 +28,9 @@ product_library["product_order_number_occur_times"] = prior.groupby(["product_id
 print "product_urgent_avg;"
 product_library["product_urgent_avg"] = prior.groupby("product_id").add_to_cart_order.mean() # whether a product is urgent or important
 print "product_order_urgent_max_avg;"
-product_library["product_order_urgent_max_avg"] = prior.groupby(["product_id", "order_id"]).add_to_cart_order.max().reset_index().groupby("product_id")[0].mean()
+product_library["product_order_urgent_max_avg"] = prior.groupby(["product_id", "order_id"]).add_to_cart_order.max().reset_index().groupby("product_id").add_to_cart_order.mean()
 print "product_order_urgent_min_avg;"
-product_library["product_order_urgent_min_avg"] = prior.groupby(["product_id", "order_id"]).add_to_cart_order.min().reset_index().groupby("product_id")[0].mean()
+product_library["product_order_urgent_min_avg"] = prior.groupby(["product_id", "order_id"]).add_to_cart_order.min().reset_index().groupby("product_id").add_to_cart_order.mean()
 print "product_urgent_rate_max;"
 product_library["product_urgent_rate_max"] = product_library.product_urgent_avg / product_library.product_order_urgent_max_avg
 print "product_urgent_rate_min;"
@@ -43,16 +43,16 @@ print "product_hot_dow;"
 product_library["product_hot_dow"] = prior.groupby(["product_id", "order_dow", "order_number"]).order_id.size().reset_index().groupby("product_id")[0].max() # hot dow per product
 print "product_number_of_fans;"
 product_library["product_number_of_fans"] = prior.groupby("product_id").user_id.agg(lambda x: len(x.unique())) # number of fans per product
-print "product_first_occur"
+print "product_first_occur;"
 product_library["product_first_occur"] = prior.groupby("product_id").order_number.min() # first occured order number
-print "product_order_interval"
+print "product_order_interval."
 product_library["product_order_interval"] = prior.groupby("product_id").days_since_prior_order.mean() # interval days
 
 print "product features finished.\nsaving ... "
 product_library.reset_index().to_csv("./features/product_features.csv", index = False)
-print "completed."
+print "completed.\n"
 
-print "user features extraction."
+print "user features extraction ..."
 user_library = pd.DataFrame()
 print "user_occur_times;"
 user_library["user_occur_times"] = prior.groupby("user_id").order_id.size()
@@ -68,8 +68,8 @@ print "user_purchase_frequency;"
 user_library["user_purchase_frequency"] = prior.groupby("user_id").days_since_prior_order.mean()
 print "user_product_fans;"
 user_library["user_product_fans"] = prior.groupby("user_id").product_id.agg(lambda x: len(x.unique()))
-print "user_order_purchase_max"
-user_library["user_order_purchase_max"] = prior.groupby(["user_id", "order_id"]).add_to_cart_order.max() # purchase ability per user
+print "user_order_purchase_max."
+user_library["user_order_purchase_max"] = prior.groupby("user_id").add_to_cart_order.max() # purchase ability per user
 
 print "user features finished.\nsaving ... "
 user_library.reset_index().to_csv("./features/user_features.csv", index = False)
