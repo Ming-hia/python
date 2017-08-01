@@ -21,7 +21,7 @@ def keep_frac_items(top_k_orders, frac = 0.1):
     user_orders_count = top_k_orders.groupby('user_id').size().to_frame('order_count')
     user_product = user_product_count.join(user_orders_count)
     user_product['product_basket_percentage'] = user_product['product_count'] / user_product['order_count']
-    return user_product[user_product['product_basket_percentage'] >= frac].reset_index()
+    return user_product[user_product['product_basket_percentage'] >= frac].reset_index()[["user_id", "product_id"]]
 
 print "reading data ..."
 prior = pd.read_csv("./downloads/order_products__prior.csv")
