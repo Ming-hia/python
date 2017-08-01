@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jul 31 17:12:25 2017
-
-@author: mingxia.huang
-"""
+    Created on Mon Jul 31 17:12:25 2017
+    
+    @author: mingxia.huang
+    """
 
 import pandas as pd
 
@@ -17,6 +17,7 @@ print "prior contrains {} / {} orders;".format(prior.order_id.unique().size, ord
 print "prior contrains {} / {} products;".format(prior.product_id.unique().size, products.product_id.unique().size)
 prior = pd.merge(prior, orders)
 print "prior contrains {} / {} users.".format(prior.user_id.unique().size, orders.user_id.unique().size)
+# order_id, product_id, add_to_cart_order, reordered, user_id, eval_set, order_number, order_dow, order_hour_of_day, days_since_prior_order
 
 print "product features extraction."
 product_library = pd.DataFrame()
@@ -51,4 +52,26 @@ print "product features finished.\nsaving ... "
 product_library.reset_index().to_csv("./features/product_features.csv", index = False)
 print "completed."
 
+print "user features extraction."
+user_library = pd.DataFrame()
+print "user_occur_times;"
+user_library["user_occur_times"] = prior.groupby("user_id").order_id.size()
+print "user_order_times;"
+user_library["user_order_times"] = prior.groupby("user_id").order_number.max()
+print "user_order_avg;"
+user_library["user_order_avg"] = user_library.user_occur_times / user_library.user_order_times
+print "user_reordered_times;"
+user_library["user_reordered_times"] = prior.groupby("user_id").reordered.sum()
+print "user_reordered_rate;"
+user_library["user_reordered_rate"] = user_library.user_reordered_times / user_library.user_occur_times
+print "user_purchase_frequency;"
+user_library["user_purchase_frequency"] = prior.groupby("user_id").days_since_prior_order.mean()
+print "user_product_fans;"
+user_library["user_product_fans"] = prior.groupby("user_id").product_id.agg(lambda x: len(x.unique()))
+print "user_order_purchase_max"
+user_library["user_order_purchase_max"] = prior.groupby(["user_id", "order_id"]).add_to_cart_order.max() # purchase ability per user
+
+print "user features finished.\nsaving ... "
+user_library.reset_index().to_csv("./features/user_features.csv", index = False)
+print "completed."
 
