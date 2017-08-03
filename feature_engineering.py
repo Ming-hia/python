@@ -52,8 +52,9 @@ if product_update_flag:
     product_library["product_urgent_rate_max"] = product_library.product_urgent_avg / product_library.product_order_urgent_max_avg
     print "product_urgent_rate_min;"
     product_library["product_urgent_rate_min"] = product_library.product_order_urgent_min_avg / product_library.product_urgent_avg
-    print "product_reorder_times;"
-    product_library["product_reorder_times"] = prior.groupby("product_id").reordered.sum() # reorders per product in prior
+    print "product_reordered_times;"
+    product_library["product_reordered_times"] = prior.groupby("product_id").reordered.sum() # reorders per product in prior
+    product_library["product_reordered_rate"] = product_library.product_reordered_times / product_library.product_occur_times
     print "product_hot_hour;"
     product_library["product_hot_hour"] = prior.groupby(["product_id", "order_hour_of_day", "order_number"]).order_id.size().reset_index().groupby("product_id")[0].max() # hot hour per product
     print "product_hot_dow;"
@@ -91,7 +92,7 @@ if user_update_flag:
 
     print "user features finished.\nsaving ... "
     user_library.reset_index().to_csv("./features/user_features.csv", index = False)
-    print "completed."
+    print "completed.\n"
 
 if user_product_update_flag:
     print "user product features extraction ..."
@@ -104,12 +105,28 @@ if user_product_update_flag:
     recent_ordered_products = keep_frac_items(last_order, 0.0)
     recent_ordered_products["in_last_order"] = 1
 
-    user_product = prior[["user_id","product_id"]].drop_duplicates()
-    user_product = pd.merge(user_product, top_k_products, how = "left")
-    user_product = pd.merge(user_product, recent_ordered_products, how = "left")
-    user_product.is_top_k = user_product.is_top_k.fillna(0)
-    user_product.in_last_order = user_product.in_last_order.fillna(0)
+    print "user product features extraction ..."
+    user_product_library = pd.DataFrame()
+    user_product_library["user_product_first_orders"] = prior.groupby(["user_id","product_id"]).order_number.min()
+    user_product_library["user_product_last_orders"] = prior.groupby(["user_id","product_id"]).order_number.max()
+    user_product_library["user_product_purchase_avg"] = prior.groupby(["user_id","product_id"]).add_to_cart_order.mean()
+    user_product_library["user_product_occur_times"] = prior.groupby(["user_id","product_id"]).order_id.size()
+    user_product_library["user_product_reordered_times"] = prior.groupby(["user_id","product_id"]).reordered.sum()
+    user_product_library["user_product_reordered_rate"] = user_product_library.user_product_reordered_times / user_product_library.user_product_occur_times
+    
+    if not user_update_flag:
+        user_library = pd.DataFrame()
+        user_library["user_occur_times"] = prior.groupby("user_id").order_id.size()
+    user_product_library = pd.merge(user_product_library.reset_index(), user_library.reset_index(), how = "left")
+    user_product_library["user_product_order_rate"] = user_product_library.user_product_occur_times / user_product_library.user_occur_times
+    user_product_library["user_product_orders_since_last_order "] = user_product_library.user_occur_times / user_product_library.user_product_last_orders
+    user_product_library["user_product_rate_since_first_order"] = user_product_library.user_product_occur_times / (user_product_library.user_occur_times - user_product_library.user_product_first_orders + 1)
+    
+    user_product_library = pd.merge(user_product_library, top_k_products, how = "left")
+    user_product_library = pd.merge(user_product_library, recent_ordered_products, how = "left")
+    user_product_library.is_top_k = user_product_library.is_top_k.fillna(0)
+    user_product_library.in_last_order = user_product_library.in_last_order.fillna(0)
 
     print "user product features finished.\nsaving ... "
-    user_product.to_csv("./features/user_product_features.csv", index = False)
+    user_product_library.to_csv("./features/user_product_features.csv", index = False)
     print "completed."
