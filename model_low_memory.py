@@ -130,3 +130,8 @@ output["products"] = output["products"].apply(lambda x: " ".join(x))
 output = pd.concat([output.reset_index(), empty])
 output.to_csv("./outputs/lgb.csv", index = False)
 print "complete."
+
+feature_importances = pd.DataFrame(zip(features, model.feature_importances_))
+feature_importances.columns = ["features", "importances"]
+feature_importances = feature_importances.sort_values(by = "importances")
+feature_importances.to_csv("./outputs/feature_importances.csv", index = False)
