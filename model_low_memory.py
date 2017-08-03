@@ -3,6 +3,7 @@ import numpy as np
 import lightgbm as lgb
 from sklearn.metrics import f1_score
 from sklearn.model_selection import GroupKFold
+from F1Optimizer_numba import *
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -101,11 +102,23 @@ test = pd.merge(test, user_features, on = "user_id")
 del user_features
 
 X_test = test[features]
-test["pred"] = 0
-
-pred = pd.DataFrame(model.predict_proba(test[features]))[1]
-test["pred"] = np.where(pred > 0.2, 1, 0)
+test["pred"] = pd.DataFrame(model.predict_proba(test[features]))[1]
 prediction = test[["order_id", "product_id", "pred"]]
+
+def get_topk_threshold(x):
+    x.sort(reverse=True)
+    pNone = (1.0 - np.array(x)).prod()
+    opt = F1Optimizer.maximize_expectation(x, pNone)
+    k = opt[0]
+    if k == 0:
+        return 2
+    else:
+        return x[k-1]
+
+probs = prediction.groupby("order_id")["pred"].apply(list).to_frame("predictions")
+probs["threshold"] = probs.predictions.apply(get_topk_threshold)
+prediction = pd.merge(prediction, probs.reset_index(), on = "order_id", how = "left")
+prediction.pred = (prediction.pred >= prediction.threshold).apply(int)
 prediction.product_id = prediction.product_id.apply(str)
 order_cnt = prediction.groupby("order_id").pred.sum()
 order_cnt = order_cnt[order_cnt == 0].reset_index()
