@@ -9,7 +9,11 @@ import pandas as pd
 
 product_update_flag = 0
 user_update_flag = 0
-user_product_update_flag = 1
+user_product_update_flag = 0
+
+user_department_update_flag = 1    
+user_aisle_update_flag = 1
+department_hour_update_flag = 1    
 
 def keep_k_orders(df, k = 10):
     df["num_orders"] = df.groupby("user_id")["order_number"].transform(max)
@@ -27,6 +31,9 @@ print "reading data ..."
 prior = pd.read_csv("./downloads/order_products__prior.csv")
 orders = pd.read_csv("./downloads/orders.csv")
 products = pd.read_csv("./downloads/products.csv")
+departments = pd.read_csv("./downloads/departments.csv")
+aisles = pd.read_csv("./downloads/aisles.csv")
+
 print "done.\n"
 print "exploring data analysis:"
 print "prior contrains {} / {} orders;".format(prior.order_id.unique().size, orders.order_id.unique().size)
@@ -34,6 +41,10 @@ print "prior contrains {} / {} products;".format(prior.product_id.unique().size,
 prior = pd.merge(prior, orders)
 print "prior contrains {} / {} users.".format(prior.user_id.unique().size, orders.user_id.unique().size)
 # order_id, product_id, add_to_cart_order, reordered, user_id, eval_set, order_number, order_dow, order_hour_of_day, days_since_prior_order
+
+products = pd.merge(products, departments, on = "department_id", how = "left")
+products = pd.merge(products, aisles, on = "aisle_id", how = "left")
+prior = pd.merge(prior, products, on = "product_id", how = "left")
 
 if product_update_flag:
     print "product features extraction ..."
@@ -44,14 +55,6 @@ if product_update_flag:
     product_library["product_order_number_occur_times"] = prior.groupby(["product_id","order_number"]).order_id.size().reset_index().groupby("product_id")[0].mean() # orders per product and order number, describes the hot trendency each product
     print "product_urgent_avg;"
     product_library["product_urgent_avg"] = prior.groupby("product_id").add_to_cart_order.mean() # whether a product is urgent or important
-    print "product_order_urgent_max_avg;"
-    product_library["product_order_urgent_max_avg"] = prior.groupby(["product_id", "order_id"]).add_to_cart_order.max().reset_index().groupby("product_id").add_to_cart_order.mean()
-    print "product_order_urgent_min_avg;"
-    product_library["product_order_urgent_min_avg"] = prior.groupby(["product_id", "order_id"]).add_to_cart_order.min().reset_index().groupby("product_id").add_to_cart_order.mean()
-    print "product_urgent_rate_max;"
-    product_library["product_urgent_rate_max"] = product_library.product_urgent_avg / product_library.product_order_urgent_max_avg
-    print "product_urgent_rate_min;"
-    product_library["product_urgent_rate_min"] = product_library.product_order_urgent_min_avg / product_library.product_urgent_avg
     print "product_reordered_times;"
     product_library["product_reordered_times"] = prior.groupby("product_id").reordered.sum() # reorders per product in prior
     product_library["product_reordered_rate"] = product_library.product_reordered_times / product_library.product_occur_times
@@ -75,8 +78,8 @@ if user_update_flag:
     user_library = pd.DataFrame()
     print "user_occur_times;"
     user_library["user_occur_times"] = prior.groupby("user_id").order_id.size()
-    print "user_order_times;"
-    user_library["user_order_times"] = prior.groupby("user_id").order_number.max()
+    #print "user_order_times;"
+    #user_library["user_order_times"] = prior.groupby("user_id").order_number.max()
     print "user_order_avg;"
     user_library["user_order_avg"] = user_library.user_occur_times / user_library.user_order_times
     print "user_reordered_times;"
@@ -127,6 +130,49 @@ if user_product_update_flag:
     user_product_library.is_top_k = user_product_library.is_top_k.fillna(0)
     user_product_library.in_last_order = user_product_library.in_last_order.fillna(0)
 
+    if not user_update_flag:
+        del user_product_library["user_occur_times"]
+
     print "user product features finished.\nsaving ... "
     user_product_library.to_csv("./features/user_product_features.csv", index = False)
+    print "completed."
+
+if user_department_update_flag:
+    print "user department features extraction ..."
+    department_library = pd.DataFrame()
+    department_library["department_reordered_times"] = prior.groupby("department_id").reordered.sum()   
+    department_library["department_occur_times"] = prior.groupby("department_id").order_id.size()
+    department_library["department_reordered_rate"] = department_library.department_reordered_times / department_library.department_occur_times
+    user_department_library = pd.DataFrame()
+    user_department_library["user_department_reordered_times"] = prior.groupby(["user_id","department_id"]).reordered.sum()
+    user_department_library["user_department_occur_times"] = prior.groupby(["user_id","department_id"]).order_id.size()
+    user_department_library["user_department_reordered_rate"] = user_department_library.user_department_reordered_times / user_department_library.user_department_occur_times
+    user_department_library = user_department_library.join(department_library).reset_index()
+    print "user department features finished.\nsaving ... "
+    user_department_library.to_csv("./features/user_department_features.csv", index = False)
+    print "completed."
+
+if user_aisle_update_flag:
+    print "user aisle features extraction ..."
+    aisle_library = pd.DataFrame()
+    aisle_library["aisle_reordered_times"] = prior.groupby("aisle_id").reordered.sum()
+    aisle_library["aisle_occur_times"] = prior.groupby("aisle_id").order_id.size()
+    aisle_library["aisle_reordered_rate"] = aisle_library.aisle_reordered_times / aisle_library.aisle_occur_times
+    user_aisle_library = pd.DataFrame()
+    user_aisle_library["user_aisle_reordered_times"] = prior.groupby(["user_id","aisle_id"]).reordered.sum()
+    user_aisle_library["user_aisle_occur_times"] = prior.groupby(["user_id","aisle_id"]).order_id.size()
+    user_aisle_library["user_aisle_reordered_rate"] = user_aisle_library.user_aisle_reordered_times / user_aisle_library.user_aisle_occur_times 
+    user_aisle_library = user_aisle_library.join(aisle_library).reset_index()
+    print "user aisle features finished.\nsaving ... "
+    user_aisle_library.to_csv("./features/user_aisle_features.csv", index = False)
+    print "completed."
+    
+if department_hour_update_flag:
+    print "department hour features extraction ..."
+    department_hour_library = pd.DataFrame()
+    department_hour_library["department_hour_occur_times"] = prior.groupby(["department_id", "order_hour_of_day"]).order_id.size()
+    department_hour_library["department_hour_reordered_times"] = prior.groupby(["department_id", "order_hour_of_day"]).reordered.sum()
+    department_hour_library["department_hour_reordered_rate"] = department_hour_library.department_hour_reordered_times / department_hour_library.department_hour_occur_times
+    print "department hour features finished.\nsaving ... "
+    department_hour_library.reset_index().to_csv("./features/department_hour_features.csv", index = False)
     print "completed."
