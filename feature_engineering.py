@@ -6,14 +6,17 @@
     """
 
 import pandas as pd
+import numpy as np
 
 product_update_flag = 0
 user_update_flag = 0
-user_product_update_flag = 0
+user_product_update_flag = 1
 
-user_department_update_flag = 1    
-user_aisle_update_flag = 1
-department_hour_update_flag = 1    
+user_department_update_flag = 0    
+user_aisle_update_flag = 0
+department_hour_update_flag = 0
+
+user_product_additional_flag = 0
 
 def keep_k_orders(df, k = 10):
     df["num_orders"] = df.groupby("user_id")["order_number"].transform(max)
@@ -38,6 +41,11 @@ print "done.\n"
 print "exploring data analysis:"
 print "prior contrains {} / {} orders;".format(prior.order_id.unique().size, orders.order_id.unique().size)
 print "prior contrains {} / {} products;".format(prior.product_id.unique().size, products.product_id.unique().size)
+
+print "order features extraction ..."
+order_library = orders.groupby(["user_id", "order_number"]).days_since_prior_order.sum().groupby(level = [0]).cumsum().reset_index().rename(columns = {"days_since_prior_order": "days_since_prior_order_cumsum"})
+orders = pd.merge(orders, order_library, how = "left")
+
 prior = pd.merge(prior, orders)
 print "prior contrains {} / {} users.".format(prior.user_id.unique().size, orders.user_id.unique().size)
 # order_id, product_id, add_to_cart_order, reordered, user_id, eval_set, order_number, order_dow, order_hour_of_day, days_since_prior_order
@@ -46,28 +54,27 @@ products = pd.merge(products, departments, on = "department_id", how = "left")
 products = pd.merge(products, aisles, on = "aisle_id", how = "left")
 prior = pd.merge(prior, products, on = "product_id", how = "left")
 
+
 if product_update_flag:
     print "product features extraction ..."
     product_library = pd.DataFrame()
-    print "product_occur_times;"
     product_library["product_occur_times"] = prior.groupby("product_id").order_id.size() # orders per product in prior
-    print "product_order_number_occur_times;"
-    product_library["product_order_number_occur_times"] = prior.groupby(["product_id","order_number"]).order_id.size().reset_index().groupby("product_id")[0].mean() # orders per product and order number, describes the hot trendency each product
-    print "product_urgent_avg;"
-    product_library["product_urgent_avg"] = prior.groupby("product_id").add_to_cart_order.mean() # whether a product is urgent or important
-    print "product_reordered_times;"
     product_library["product_reordered_times"] = prior.groupby("product_id").reordered.sum() # reorders per product in prior
     product_library["product_reordered_rate"] = product_library.product_reordered_times / product_library.product_occur_times
-    print "product_hot_hour;"
-    product_library["product_hot_hour"] = prior.groupby(["product_id", "order_hour_of_day", "order_number"]).order_id.size().reset_index().groupby("product_id")[0].max() # hot hour per product
-    print "product_hot_dow;"
-    product_library["product_hot_dow"] = prior.groupby(["product_id", "order_dow", "order_number"]).order_id.size().reset_index().groupby("product_id")[0].max() # hot dow per product
-    print "product_number_of_fans;"
+    product_library["product_order_interval"] = prior.groupby("product_id").days_since_prior_order.mean() # interval days    
+    product_library["product_interval_varities"] = prior.groupby("product_id").days_since_prior_order.std()
     product_library["product_number_of_fans"] = prior.groupby("product_id").user_id.agg(lambda x: len(x.unique())) # number of fans per product
-    print "product_first_occur;"
-    product_library["product_first_occur"] = prior.groupby("product_id").order_number.min() # first occured order number
-    print "product_order_interval."
-    product_library["product_order_interval"] = prior.groupby("product_id").days_since_prior_order.mean() # interval days
+    
+    print "keep products in last order;"
+    last_order = keep_k_orders(prior, 1)
+    product_library["last_reordered_rate"] = last_order.groupby("product_id").reordered.sum() / last_order.groupby("product_id").order_id.size()
+    product_library["last_reordered_rate"] = product_library["last_reordered_rate"].fillna(-1)
+    
+    product_library["product_urgent_avg"] = prior.groupby("product_id").add_to_cart_order.mean() # whether a product is urgent or important
+    #product_library["product_hot_hour"] = prior.groupby(["product_id", "order_hour_of_day", "order_number"]).order_id.size().reset_index().groupby("product_id")[0].max() # hot hour per product
+    #product_library["product_hot_dow"] = prior.groupby(["product_id", "order_dow", "order_number"]).order_id.size().reset_index().groupby("product_id")[0].max() # hot dow per product
+    #product_library["product_first_occur"] = prior.groupby("product_id").order_number.min() # first occured order number
+    del product_library["product_reordered_times"]
 
     print "product features finished.\nsaving ... "
     product_library.reset_index().to_csv("./features/product_features.csv", index = False)
@@ -76,66 +83,16 @@ if product_update_flag:
 if user_update_flag:
     print "user features extraction ..."
     user_library = pd.DataFrame()
-    print "user_occur_times;"
     user_library["user_occur_times"] = prior.groupby("user_id").order_id.size()
-    #print "user_order_times;"
-    #user_library["user_order_times"] = prior.groupby("user_id").order_number.max()
-    print "user_order_avg;"
-    user_library["user_order_avg"] = user_library.user_occur_times / user_library.user_order_times
-    print "user_reordered_times;"
     user_library["user_reordered_times"] = prior.groupby("user_id").reordered.sum()
-    print "user_reordered_rate;"
     user_library["user_reordered_rate"] = user_library.user_reordered_times / user_library.user_occur_times
-    print "user_purchase_frequency;"
     user_library["user_purchase_frequency"] = prior.groupby("user_id").days_since_prior_order.mean()
-    print "user_product_fans;"
+    user_library["user_purchase_varities"] = prior.groupby("user_id").days_since_prior_order.std()
     user_library["user_product_fans"] = prior.groupby("user_id").product_id.agg(lambda x: len(x.unique()))
-    print "user_order_purchase_max."
-    user_library["user_order_purchase_max"] = prior.groupby("user_id").add_to_cart_order.max() # purchase ability per user
 
     print "user features finished.\nsaving ... "
     user_library.reset_index().to_csv("./features/user_features.csv", index = False)
     print "completed.\n"
-
-if user_product_update_flag:
-    print "user product features extraction ..."
-    print "find products in recent k orders;"
-    top_k_orders = keep_k_orders(prior)
-    top_k_products = keep_frac_items(top_k_orders, 0.025)
-    top_k_products["is_top_k"] = 1
-    print "keep products in last order;"
-    last_order = keep_k_orders(prior, 1)
-    recent_ordered_products = keep_frac_items(last_order, 0.0)
-    recent_ordered_products["in_last_order"] = 1
-
-    print "user product features extraction ..."
-    user_product_library = pd.DataFrame()
-    user_product_library["user_product_first_orders"] = prior.groupby(["user_id","product_id"]).order_number.min()
-    user_product_library["user_product_last_orders"] = prior.groupby(["user_id","product_id"]).order_number.max()
-    user_product_library["user_product_purchase_avg"] = prior.groupby(["user_id","product_id"]).add_to_cart_order.mean()
-    user_product_library["user_product_occur_times"] = prior.groupby(["user_id","product_id"]).order_id.size()
-    user_product_library["user_product_reordered_times"] = prior.groupby(["user_id","product_id"]).reordered.sum()
-    user_product_library["user_product_reordered_rate"] = user_product_library.user_product_reordered_times / user_product_library.user_product_occur_times
-    
-    if not user_update_flag:
-        user_library = pd.DataFrame()
-        user_library["user_occur_times"] = prior.groupby("user_id").order_id.size()
-    user_product_library = pd.merge(user_product_library.reset_index(), user_library.reset_index(), how = "left")
-    user_product_library["user_product_order_rate"] = user_product_library.user_product_occur_times / user_product_library.user_occur_times
-    user_product_library["user_product_orders_since_last_order "] = user_product_library.user_occur_times / user_product_library.user_product_last_orders
-    user_product_library["user_product_rate_since_first_order"] = user_product_library.user_product_occur_times / (user_product_library.user_occur_times - user_product_library.user_product_first_orders + 1)
-    
-    user_product_library = pd.merge(user_product_library, top_k_products, how = "left")
-    user_product_library = pd.merge(user_product_library, recent_ordered_products, how = "left")
-    user_product_library.is_top_k = user_product_library.is_top_k.fillna(0)
-    user_product_library.in_last_order = user_product_library.in_last_order.fillna(0)
-
-    if not user_update_flag:
-        del user_product_library["user_occur_times"]
-
-    print "user product features finished.\nsaving ... "
-    user_product_library.to_csv("./features/user_product_features.csv", index = False)
-    print "completed."
 
 if user_department_update_flag:
     print "user department features extraction ..."
@@ -175,4 +132,83 @@ if department_hour_update_flag:
     department_hour_library["department_hour_reordered_rate"] = department_hour_library.department_hour_reordered_times / department_hour_library.department_hour_occur_times
     print "department hour features finished.\nsaving ... "
     department_hour_library.reset_index().to_csv("./features/department_hour_features.csv", index = False)
+    print "completed."
+
+if user_product_update_flag:
+    print "user product features extraction ..."
+    print "find products in recent k orders;"
+    top_k_orders = keep_k_orders(prior)
+    top_k_products = keep_frac_items(top_k_orders, 0.025)
+    top_k_products["is_top_k"] = 1
+    
+    print "keep products in last order;"
+    last_order = keep_k_orders(prior, 1)
+    recent_ordered_products = keep_frac_items(last_order, 0.0)
+    recent_ordered_products["in_last_order"] = 1
+
+    print "user product features extraction ..."
+    user_product_library = pd.DataFrame()    
+
+    print "important patterns"
+    user_product_library["user_product_last_orders"] = prior.groupby(["user_id", "product_id"]).order_number.max()
+    user_product_library["user_product_order_number_avg"] = prior.groupby(["user_id", "product_id"]).order_number.mean()
+    user_product_library["user_product_order_number_skew"] = user_product_library["user_product_order_number_avg"] / user_product_library["user_product_last_orders"]
+
+    print "self-defined features;"
+    user_product_library["user_product_first_orders"] = prior.groupby(["user_id","product_id"]).order_number.min()
+    user_product_library["user_product_purchase_frequency"] = prior.groupby(["user_id","product_id"]).days_since_prior_order.mean()
+    user_product_library["user_product_purchase_varities"] = prior.groupby(["user_id","product_id"]).days_since_prior_order.std() 
+    user_product_library["user_product_purchase_avg"] = prior.groupby(["user_id","product_id"]).add_to_cart_order.mean()
+    user_product_library["user_product_occur_times"] = prior.groupby(["user_id","product_id"]).order_id.size()
+    user_product_library["user_product_reordered_times"] = prior.groupby(["user_id","product_id"]).reordered.sum()
+
+    print "shared features;"
+    user_product_library["order_dow_median"] = prior.groupby(["user_id","product_id"]).order_dow.agg(lambda x: np.median(x))
+    user_product_library["order_hour_of_day_median"] = prior.groupby(["user_id", "product_id"]).order_hour_of_day.agg(lambda x: np.median(x))
+    
+    extra_library = pd.DataFrame()
+    extra_library["user_order_numbers"] = prior.groupby("user_id").order_number.max()
+    extra_library["user_occur_times"] = prior.groupby("user_id").order_id.size()
+        
+    user_product_library = pd.merge(user_product_library.reset_index(), extra_library.reset_index(), how = "left")
+    del extra_library
+    user_product_library["user_product_orders_since_last_orders"] = user_product_library.user_order_numbers - user_product_library.user_product_last_orders + 1
+    
+    del user_product_library["user_order_numbers"]
+    order_streaks = pd.read_csv("./features/order_streaks.csv")
+    user_product_library = pd.merge(user_product_library, order_streaks, how = "left")
+    user_product_library.order_streak = user_product_library.order_streak.fillna(0)
+    del order_streaks
+
+    user_product_library["user_product_reordered_rate"] = user_product_library.user_product_reordered_times / user_product_library.user_product_occur_times
+    user_product_library["user_product_order_rate"] = user_product_library.user_product_occur_times / user_product_library.user_occur_times
+    user_product_library["user_product_orders_since_last_order"] = user_product_library.user_occur_times - user_product_library.user_product_last_orders
+    user_product_library["user_product_rate_since_first_order"] = user_product_library.user_product_occur_times / (user_product_library.user_occur_times - user_product_library.user_product_first_orders + 1)
+    
+    user_product_library = pd.merge(user_product_library, top_k_products, how = "left")
+    user_product_library = pd.merge(user_product_library, recent_ordered_products, how = "left")
+    user_product_library.is_top_k = user_product_library.is_top_k.fillna(0)
+    user_product_library.in_last_order = user_product_library.in_last_order.fillna(0)
+
+    del user_product_library["user_product_reordered_times"]
+    del user_product_library["user_occur_times"]
+
+    print "user product features finished.\nsaving ... "
+    user_product_library.to_csv("./features/user_product_features.csv", index = False)
+    print "completed."
+    
+if user_product_additional_flag:
+    print "user product additional features ..."
+    user_product_library = pd.DataFrame()
+    user_product_library["periods"] = prior.groupby(['user_id', 'product_id', 'order_number'])['days_since_prior_order_cumsum'].sum().groupby(level=[0, 1]).apply(lambda x: np.diff(x))
+    
+    user_product_library['last'] = user_product_library.periods.apply(lambda x: x[-1] if len(x) > 0 else np.nan)
+    user_product_library['prev1'] = user_product_library.periods.apply(lambda x: x[-2] if len(x) > 1 else np.nan)
+    user_product_library['prev2'] = user_product_library.periods.apply(lambda x: x[-3] if len(x) > 2 else np.nan)
+    user_product_library['median'] = user_product_library.periods.apply(lambda x: np.median(x))
+    user_product_library['mean'] = user_product_library.periods.apply(lambda x: np.mean(x))
+    del user_product_library["periods"]
+    
+    print "user product additional features finished.\nsaving ... "
+    user_product_library.fillna(0).reset_index().to_csv("./features/user_product_additional_features.csv", index = False)
     print "completed."
